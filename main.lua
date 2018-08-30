@@ -5,14 +5,15 @@ math.randomseed( os.time() )
 local boids = {}
 
 function love.load()
-	for i=1, 10 do
+	for i=1, 30 do
 		table.insert(
 			boids,
 			Boid:new(
 				math.random(0, 400),
 				math.random(0, 400),
-				200,
-				20
+				300,
+				-- math.random(100, 300),
+				math.random(10, 30)
 			)
 		)
 	end
@@ -28,7 +29,7 @@ function love.update(dt)
 	local mx, my = love.mouse.getX(), love.mouse.getY()
 	for i=1, #boids do
 		boids[i]:moveToPosition(mx, my)
-		boids[i]:update(dt, 30)
+		boids[i]:update(dt, 20)
 	end
 end
 

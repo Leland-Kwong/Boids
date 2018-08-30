@@ -84,20 +84,20 @@ function Boid:update(dt, radius)
 	)
 
 	-- average up the vectors of all neighbors
-	local neighbors = self:getNeighbors(radius)
+	local neighbors = self:getNeighbors(radius + self.size/2)
 	local alignmentX, alignmentY = computeAlignment(self, neighbors)
 	local cohesionX, cohesionY = computeCohesion(self, neighbors)
 	local separationX, separationY = computeSeparation(self, neighbors)
 
 	local speed = self.speed * dt
-	local separationWeight = 1
-	local alignmentWeight = 10
-	local cohesionWeight = 0.5
+	local separationWeight = 0.02
+	local alignmentWeight = 1
+	local cohesionWeight = 1
 	local adjustedVx = vx + (alignmentX * alignmentWeight) + (cohesionX * cohesionWeight) + (separationX * separationWeight)
 	local adjustedVy = vy + (alignmentY * alignmentWeight) + (cohesionY * cohesionWeight) + (separationY * separationWeight)
 	adjustedVx, adjustedVy = Utils.normalizeVector(adjustedVx, adjustedVy)
-	self.vx = vx
-	self.vy = vy
+	self.vx = adjustedVx
+	self.vy = adjustedVy
 	self.x = self.x + (speed * (adjustedVx))
 	self.y = self.y + (speed * (adjustedVy))
 end
