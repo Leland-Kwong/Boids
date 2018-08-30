@@ -1,31 +1,46 @@
 local Boid = require('Boid')
 
--- Define some limiting constants
-MAX_FORCE = 1.75
-MAX_SPEED = 2.0
+math.randomseed( os.time() )
 
--- Start our wanderer in the center
+local boids = {}
 
-local wanderers = {}
-
-function animate(event)	
-	for i=1,#wanderers do
-		local wanderer = wanderers[i]
-		wanderer:wander()
-		wanderer:run()
+function love.load()
+	for i=1, 10 do
+		table.insert(
+			boids,
+			Boid:new(
+				math.random(0, 400),
+				math.random(0, 400),
+				200,
+				20
+			)
+		)
 	end
 end
 
-function Main()
-	math.randomseed( os.time() )
-	
-	for i=1,10 do
-		local loc = Vector2D:new(display.contentWidth / 2,display.contentWidth / 2)
-		local wanderer = Boid:new(loc,MAX_FORCE,MAX_SPEED)
-		table.insert(wanderers,wanderer)
+function love.keypressed(key)
+	if key == 'escape' then
+		love.event.quit()
 	end
-	
-	Runtime:addEventListener( "enterFrame", animate );
 end
 
-Main()
+function love.update(dt)
+	local mx, my = love.mouse.getX(), love.mouse.getY()
+	for i=1, #boids do
+		boids[i]:moveToPosition(mx, my)
+		boids[i]:update(dt, 30)
+	end
+end
+
+function love.draw()
+	love.graphics.setColor(1,1,0)
+	for i=1, #boids do
+		local b = boids[i]
+		love.graphics.circle(
+			'fill',
+			b.x,
+			b.y,
+			b.size / 2
+		)
+	end
+end

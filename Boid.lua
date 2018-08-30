@@ -1,124 +1,105 @@
-Boid = {}
-Vector2D = require("Vector2D")
+local Utils = require 'utils'
+local Boid = {}
 
-local BOID_SIZE = 4
+local boids = {}
 
-function Boid:new(location, ms, mf)  
-	local object = { 
-		maxSpeed = ms, 
-		maxForce = mf,
-		loc = location,  
-		vel = Vector2D:new(0,0),
-		acc = Vector2D:new(0,0),
-	    wanderTheta = 0.0,
-		displayObject = display.newCircle( display.contentWidth / 2, display.contentHeight/2, BOID_SIZE ),
+function Boid:new(x, y, speed, size)
+	local boid = {
+		x = x,
+		y = y,
+		vx = 0,
+		vy = 0,
+		target = {
+			x = 0,
+			y = 0
+		},
+		speed = speed,
+		size = size
 	}
-	
-	object.displayObject:setFillColor(0,255,0)
-
-  	setmetatable(object, { __index = Boid })  
-  	return object
+	setmetatable(boid, self)
+	self.__index = self
+	table.insert(boids, boid)
+	return boid
 end
 
-function Boid:run(event) 
-	self:update()
-	self:borders()	
-	self:render()
+function Boid:moveToPosition(x, y)
+	self.target.x = x
+	self.target.y = y
 end
 
-function Boid:update()
-	-- Update velocity
-	self.vel:add(self.acc)
-	-- Limit speed
-	self.vel:limit(self.maxSpeed)		
-	-- Move boid
-	self.loc:add(self.vel)
-	-- reset acceleration
-	self.acc:mult(0)
-end
-
-function Boid:render()
-	self.displayObject.x = self.loc.x
-	self.displayObject.y = self.loc.y
-end
-
-function Boid:seek(target)
-	self.acc = self:steer(target, false)
-end
-
-function Boid:arrive(target)
-	self.acc = self:steer(target, true)
-end
-
-function Boid:steer(target, slowdown) 
-	local steer
-	local desired = Vector2D:Sub(target, self.loc)
-	local d = desired:magnitude()
-	
-	if d > 0 then
-		desired:normalize()
-		
-		if slowdown and d < 100.0 then 
-			local dampSpeed = self.maxSpeed*(d/100.0) -- This damping is somewhat arbitrary			
-			desired:mult(dampSpeed) 
-	    else
-			desired:mult(self.maxSpeed)
+function Boid:getNeighbors(maxDistFromNeighbor)
+	local neighbors = {}
+	for i=1, #boids do
+		local b = boids[i]
+		local isNeighbor = b ~= self
+		if isNeighbor then
+			local dist = Utils.dist(self.x, self.y, b.x, b.y)
+			if dist <= maxDistFromNeighbor then
+				table.insert(neighbors, b)
+			end
 		end
-		
-		steer = Vector2D:Sub(desired, self.vel)
-		steer:limit(self.maxForce)
-	else
-		steer = Vector2D:new(0,0)
 	end
-	
-	return steer
+	return neighbors
 end
 
-function Boid:borders()
-	if self.loc.x + BOID_SIZE >= display.contentWidth - 5 then
-		self.wanderTheta = math.pi
-		self.loc.x = self.loc.x - 1
-	end	
-	if self.loc.x <= 5 then
-		self.wanderTheta = 0
-		self.loc.x = self.loc.x + 1
+local function computeAlignment(self, neighbors)
+	local vx, vy = 0, 0
+	local neighborCount = #neighbors
+	for i=1, neighborCount do
+		local n = neighbors[i]
+		vx = vx + n.vx
+		vy = vy + n.vy
 	end
-	
-	if self.loc.y <= 5 then
-		self.wanderTheta = math.pi/2
-		self.loc.y = self.loc.y + 1
-	end
-	
-	if self.loc.y + BOID_SIZE >= display.contentHeight - 5 then
-		self.wanderTheta = (3 * math.pi) / 2
-		self.loc.y = self.loc.y - 1
-	end
+	return Utils.normalizeVector(vx, vy)
 end
 
-function Boid:wander()
-	local wanderR = 16.0
-	local wanderD = 60.0
-	local change  = 0.5
-	
-	local negChange = math.random(2)
-	local randomNum = math.random() * change
-	if negChange == 2 then
-		self.wanderTheta = self.wanderTheta - randomNum
-	else 
-		self.wanderTheta = self.wanderTheta + randomNum
-	end 
-	
-	local circleLoc = self.vel:copy()
-	
-	circleLoc:normalize() 
-	circleLoc:mult(wanderD)
-	circleLoc:add(self.loc)
-	
-	local circleOffset = Vector2D:new(wanderR*math.cos(self.wanderTheta), wanderR*math.sin(self.wanderTheta))
-	local target = circleLoc:copy()
-	target:add(circleOffset)
-	
-	self.acc:add(self:steer(target))
+local function computeCohesion(self, neighbors)
+	local px, py = 0, 0
+	local neighborCount = #neighbors
+	for i=1, neighborCount do
+		local n = neighbors[i]
+		px = px + n.x
+		py = py + n.y
+	end
+	return Utils.normalizeVector(px, py)
+end
+
+local function computeSeparation(self, neighbors)
+	local sx, sy = 0, 0
+	local neighborCount = #neighbors
+	for i=1, neighborCount do
+		local n = neighbors[i]
+		sx = sx + n.x - self.x
+		sy = sy + n.y - self.y
+	end
+	return sx * -1, sy * -1
+end
+
+function Boid:update(dt, radius)
+	local vx, vy = Utils.direction(
+		self.x,
+		self.y,
+		self.target.x,
+		self.target.y
+	)
+
+	-- average up the vectors of all neighbors
+	local neighbors = self:getNeighbors(radius)
+	local alignmentX, alignmentY = computeAlignment(self, neighbors)
+	local cohesionX, cohesionY = computeCohesion(self, neighbors)
+	local separationX, separationY = computeSeparation(self, neighbors)
+
+	local speed = self.speed * dt
+	local separationWeight = 1
+	local alignmentWeight = 10
+	local cohesionWeight = 0.5
+	local adjustedVx = vx + (alignmentX * alignmentWeight) + (cohesionX * cohesionWeight) + (separationX * separationWeight)
+	local adjustedVy = vy + (alignmentY * alignmentWeight) + (cohesionY * cohesionWeight) + (separationY * separationWeight)
+	adjustedVx, adjustedVy = Utils.normalizeVector(adjustedVx, adjustedVy)
+	self.vx = vx
+	self.vy = vy
+	self.x = self.x + (speed * (adjustedVx))
+	self.y = self.y + (speed * (adjustedVy))
 end
 
 return Boid
